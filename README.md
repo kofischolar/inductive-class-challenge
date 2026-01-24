@@ -5,7 +5,7 @@ using Graph Neural Networks (GNNs).
 
 ## Task
 Given a citation graph with node features, predict the research topic
-of unseen nodes using **inductive learning**.
+of unseen nodes using **inductive learning**. I want to reiterate that the model must make predictions for nodes that were completely unseen during training, possibly in new graph regions or new graphs, using only learned parameters, not memorized node IDs or embeddings.
 
 ## Dataset
 We use the **Cora citation network**:
