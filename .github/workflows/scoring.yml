@@ -1,0 +1,60 @@
+name: GNN Challenge Auto-Grader
+
+on:
+  pull_request:
+    paths:
+      - 'submissions/*.csv'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas scikit-learn
+
+      - name: Restore Secret Answer Key
+        # This takes the hidden secret from GitHub Settings and creates the CSV file
+        run: |
+          echo "${{ secrets.TEST_LABELS_BASE64 }}" | base64 -d > data/test_labels_hidden.csv
+
+      - name: Run Scoring Script
+        id: score
+        run: |
+          # Get the file changed in this PR
+          FILE=$(git diff --name-only origin/main ${{ github.event.pull_request.head.sha }} | grep 'submissions/.*.csv' | head -n 1)
+          
+          if [ -z "$FILE" ]; then
+            echo "No submission file found."
+            exit 1
+          fi
+
+          # Run the script passing the submission and the RESTORED answer key
+          OUTPUT=$(python scoring_script.py $FILE data/test_labels_hidden.csv)
+          echo "$OUTPUT"
+          
+          # Extract score
+          SCORE=$(echo "$OUTPUT" | grep -oP 'F1_SCORE:\K[0-9.]+')
+          echo "extracted_score=$SCORE" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: tholman/github-action-comment-pull-request@v2
+        with:
+          message: |
+            ### 🤖 Automated Grading Report
+            | Metric | Score |
+            | :--- | :--- |
+            | **Macro F1** | **${{ steps.score.outputs.extracted_score }}** |
+            
+            *Great job! If this is the highest score, merge the PR!*
