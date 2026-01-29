@@ -32,3 +32,56 @@ Clone this repository and install the dependencies:
 git clone https://github.com/emmakowu3579-ui/inductive-class-challenge.git
 cd inductive-class-challenge
 pip install -r starter_code/requirements.txt
+
+### 2. Run the Baseline
+We provide a pure PyTorch GCN baseline in the `starter_code/` folder.
+
+```bash
+python starter_code/baseline.py
+
+This script will train a simple GCN and generate a submission file at submissions/baseline_submission.csv.
+
+3. Make a Submission
+Generate your predictions. Your CSV file must follow this exact format:
+
+Code snippet
+
+id,label
+1800,3
+1801,0
+1802,4
+...
+(Header is required: id,label)
+
+Upload to GitHub:
+
+Save your file in the submissions/ folder (e.g., submissions/my_solution.csv).
+
+Commit the file to a new branch.
+
+Open a Pull Request (PR) against the main branch.
+
+🤖 Instant Grading
+Once you open a PR, our Auto-Grader Bot will run instantly.
+
+It calculates your Macro F1-Score.
+
+It posts a comment on your PR with your result.
+
+If your score is valid, the admin will merge it, and your name will appear on the Leaderboard!
+
+📏 Rules & Restrictions
+Evaluation Metric: Macro F1-score.
+
+Inductive Setting: No access to test node labels during training.
+
+Message Passing: Allowed only on the training graph during training; test edges are for inference only.
+
+External Data: Strictly forbidden.
+
+Time Limit: Training must take < 5 minutes on Google Colab (Standard GPU/CPU).
+
+Libraries: Any standard GNN library is allowed (PyTorch, DGL, PyG).
+
+🏆 Leaderboard
+Check the current rankings here: View Leaderboard
