@@ -1,0 +1,11 @@
+# Ignore python cache files
+__pycache__/
+*.pyc
+
+# CRITICAL: Ignore the answer key
+data/test_labels_hidden.csv
+
+# Ignore virtual environments
+venv/
+.env
+.ipynb_checkpoints
