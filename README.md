@@ -29,6 +29,6 @@ The `data/` folder contains:
 ### 1. Get the Code
 Clone this repository and install the dependencies:
 ```bash
-git clone [https://github.com/YOUR_USERNAME/gnn-inductive-challenge.git](https://github.com/YOUR_USERNAME/gnn-inductive-challenge.git)
-cd gnn-inductive-challenge
+git clone https://github.com/emmakowu3579-ui/inductive-class-challenge.git
+cd inductive-class-challenge
 pip install -r starter_code/requirements.txt
