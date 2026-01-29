@@ -136,4 +136,4 @@ If the submission is valid:
 ---
 
 ## 🏆 Leaderboard
-📈 View Leaderboard
+[📈 View Leaderboard](LEADERBOARD.md)
