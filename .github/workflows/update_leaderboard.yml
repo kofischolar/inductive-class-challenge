@@ -1,0 +1,43 @@
+name: Update Leaderboard
+
+# Run this ONLY when code is merged into the 'main' branch
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'submissions/*.csv'
+
+permissions:
+  contents: write
+
+jobs:
+  update-table:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas scikit-learn
+
+      - name: Restore Secret Key
+        run: |
+          echo "${{ secrets.TEST_LABELS_BASE64 }}" | base64 -d > data/test_labels_hidden.csv
+
+      - name: Generate New Leaderboard
+        run: python update_leaderboard.py
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "LeaderboardBot"
+          git config --global user.email "bot@github.com"
+          git add LEADERBOARD.md
+          # Only commit if the file actually changed
+          git diff --quiet && git diff --staged --quiet || git commit -m "🏆 Update Leaderboard"
+          git push
