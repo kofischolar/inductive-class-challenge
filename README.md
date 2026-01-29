@@ -1,87 +1,139 @@
-# 🏆 GNN Mini-Challenge: Inductive Node Classification
+## 🏆 GNN Mini-Challenge: Inductive Node Classification
 
-Welcome to the **Rising Stars GNN Mini-Competition**!
+Welcome to the **Rising Stars GNN Mini-Competition** 🚀
 
-This repository hosts a challenge on **inductive node classification** using Graph Neural Networks (GNNs). Your goal is to build a model that learns from a training graph and generalizes to completely unseen nodes.
+This repository hosts a hands-on challenge on **inductive node classification** using **Graph Neural Networks (GNNs)**. Your task is to train a model on a given graph and **generalize to completely unseen nodes**.
 
-## 🎯 The Task
-Given a citation graph with node features, predict the research topic (class) of **unseen nodes** using inductive learning.
+---
 
-**The Inductive Constraint:**
-The model must make predictions for nodes that were **completely unseen** during training (possibly in new graph regions). You must use only learned parameters (weights), not memorized node IDs or embeddings.
+## 🎯 Challenge Overview
 
-## 📂 Dataset
-We use the **Cora citation network**:
+You are given a citation network with node features and labels for training nodes only.  
+Your goal is to **predict the research topic of unseen nodes** using an **inductive GNN model**.
+
+### 🔍 What Makes This Inductive?
+
+* Test nodes are **not present during training**
+* Their IDs and labels are **never seen**
+* The model must rely **only on learned parameters**, not memorized node embeddings
+
+> **Train once, generalize to new nodes.**
+
+---
+
+## 📂 Dataset Description
+
+We use the **Cora citation network**, a standard benchmark in graph learning.
+
+### Graph Components
+
 * **Nodes:** Scientific papers
 * **Edges:** Citation relationships
 * **Node features:** Bag-of-words vectors
-* **Labels:** Research topics (7 classes)
+* **Labels:** Research topics (**7 classes**)
 
-### File Description
-The `data/` folder contains:
-* `train.csv`: Labeled nodes for training (IDs, Features, Labels).
-* `edge_list.csv`: Edges connecting training nodes.
-* `test.csv`: **Unseen** test nodes (IDs, Features). **No Labels**.
-* `test_edges.csv`: Edges involving test nodes (used for the inductive inference step).
+### 📁 Files in `data/`
+
+* `train.csv` — Training nodes (**IDs, features, labels**)
+* `edge_list.csv` — Edges between training nodes
+* `test.csv` — **Unseen test nodes** (**IDs, features only**)
+* `test_edges.csv` — Edges involving test nodes (**used only at inference time**)
+
+---
 
 ## 🚀 How to Participate
 
-### 1. Get the Code
-Clone this repository and install the dependencies:
-```bash
+### 1️⃣ Clone the Repository
+
+```
 git clone https://github.com/emmakowu3579-ui/inductive-class-challenge.git
 cd inductive-class-challenge
 pip install -r starter_code/requirements.txt
+```
 
-### 2. Run the Baseline
-We provide a pure PyTorch GCN baseline in the `starter_code/` folder.
+---
 
-```bash
+### 2️⃣ Run the Baseline Model
+
+A simple **PyTorch GCN baseline** is provided in the `starter_code/` directory.
+
+```
 python starter_code/baseline.py
+```
 
-This script will train a simple GCN and generate a submission file at submissions/baseline_submission.csv.
+This will:
 
-3. Make a Submission
-Generate your predictions. Your CSV file must follow this exact format:
+* Train a basic GCN on the training graph
+* Generate a submission file at  
+  `submissions/baseline_submission.csv`
 
-Code snippet
+---
 
+### 3️⃣ Create a Submission
+
+Your prediction file **must** follow this exact format:
+
+```
 id,label
 1800,3
 1801,0
 1802,4
 ...
-(Header is required: id,label)
+```
 
-Upload to GitHub:
+**Important:**
 
-Save your file in the submissions/ folder (e.g., submissions/my_solution.csv).
+* Header (`id,label`) is **required**
+* One row per test node
+* Labels must be integers in **[0–6]**
 
-Commit the file to a new branch.
+---
 
-Open a Pull Request (PR) against the main branch.
+### 4️⃣ Submit via GitHub
 
-🤖 Instant Grading
-Once you open a PR, our Auto-Grader Bot will run instantly.
+1. Save your file in the `submissions/` folder  
+   *(e.g., `submissions/my_solution.csv`)*
+2. Commit your changes to a **new branch**
+3. Open a **Pull Request (PR)** against the `main` branch
 
-It calculates your Macro F1-Score.
+---
 
-It posts a comment on your PR with your result.
+## 🤖 Instant Grading
 
-If your score is valid, the admin will merge it, and your name will appear on the Leaderboard!
+Once your PR is opened:
 
-📏 Rules & Restrictions
-Evaluation Metric: Macro F1-score.
+* ✅ An **Auto-Grader Bot** runs automatically
+* 📊 Your **Macro F1-Score** is computed
+* 💬 The score is posted as a comment on your PR
 
-Inductive Setting: No access to test node labels during training.
+If the submission is valid:
 
-Message Passing: Allowed only on the training graph during training; test edges are for inference only.
+* The PR will be merged by an admin
+* 🎉 Your name appears on the **Leaderboard**
 
-External Data: Strictly forbidden.
+---
 
-Time Limit: Training must take < 5 minutes on Google Colab (Standard GPU/CPU).
+## 📏 Rules & Restrictions
 
-Libraries: Any standard GNN library is allowed (PyTorch, DGL, PyG).
+* **Evaluation Metric:** Macro F1-Score
+* **Inductive Setting:**
 
-🏆 Leaderboard
-Check the current rankings here: View Leaderboard
+  * No access to test labels during training
+  * No memorization of node IDs or embeddings
+* **Message Passing:**
+
+  * Allowed **only on the training graph** during training
+  * Test edges may be used **only at inference time**
+* **External Data:** ❌ **Strictly forbidden**
+* **Runtime Constraint:**
+
+  * Training must finish in **< 5 minutes** on Google Colab (CPU/GPU)
+* **Libraries:**
+
+  * Any standard GNN library is allowed
+  * Examples: **PyTorch, PyTorch Geometric (PyG), DGL**
+
+---
+
+## 🏆 Leaderboard
+📈 View Leaderboard
