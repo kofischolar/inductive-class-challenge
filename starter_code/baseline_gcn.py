@@ -1,49 +1,114 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.datasets import Planetoid
-from torch_geometric.nn import GCNConv
-from sklearn.metrics import f1_score
+import pandas as pd
+import numpy as np
 
-# Load dataset
-dataset = Planetoid(root='/tmp/Cora', name='Cora')
-data = dataset[0]
+print("🚀 Starting Baseline GCN...")
 
-# Inductive split
-train_mask = data.train_mask
-test_mask = data.test_mask
+# 1. CONFIGURATION
+# Update paths to match the new folder structure (data/public)
+TRAIN_PATH = '../data/public/train.csv'
+TEST_PATH = '../data/public/test.csv'
+EDGE_PATH = '../data/public/edge_list.csv'
+TEST_EDGE_PATH = '../data/public/test_edges.csv'
+OUTPUT_PATH = '../submissions/baseline_submission.csv'
 
-class GCN(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+# 2. LOAD DATA
+print("   - Loading CSVs from data/public/...")
+try:
+    train_df = pd.read_csv(TRAIN_PATH)
+    test_df = pd.read_csv(TEST_PATH)
+    edge_list = pd.read_csv(EDGE_PATH)
+    test_edges = pd.read_csv(TEST_EDGE_PATH)
+except FileNotFoundError:
+    print(f"❌ Error: Files not found in data/public/. Check your directory structure.")
+    exit()
 
-    def forward(self, x, edge_index):
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index)
-        return x
+# 3. PREPARE GRAPH (Pure PyTorch Implementation)
+# Map IDs to 0..N
+all_ids = np.concatenate([train_df['id'].values, test_df['id'].values])
+id_map = {original_id: i for i, original_id in enumerate(all_ids)}
+num_nodes = len(all_ids)
 
-model = GCN(
-    in_channels=dataset.num_features,
-    hidden_channels=16,
-    out_channels=dataset.num_classes
-)
+print("   - Building Adjacency Matrix...")
+# Combine train and test edges for the structure
+all_edges = pd.concat([edge_list, test_edges])
+src = [id_map[i] for i in all_edges['source_id']]
+dst = [id_map[i] for i in all_edges['target_id']]
 
+# Add self-loops (crucial for GCN)
+src.extend(range(num_nodes))
+dst.extend(range(num_nodes))
+
+# Build Sparse Matrix (Normalized)
+indices = torch.tensor([src, dst], dtype=torch.long)
+values = torch.ones(len(src), dtype=torch.float32)
+
+# Calculate Degree Normalization (D^-0.5 * A * D^-0.5)
+row_sum = torch.zeros(num_nodes)
+row_sum.index_add_(0, indices[0], values)
+deg_inv_sqrt = row_sum.pow(-0.5)
+deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+values = values * deg_inv_sqrt[indices[0]] * deg_inv_sqrt[indices[1]]
+
+adj = torch.sparse_coo_tensor(indices, values, (num_nodes, num_nodes))
+
+# 4. PREPARE FEATURES & LABELS
+# Extract feature columns (assuming they are all columns except id, label, y_pred)
+feat_cols = [c for c in train_df.columns if c not in ['id', 'label', 'y_pred']]
+train_feats = torch.tensor(train_df[feat_cols].values, dtype=torch.float32)
+test_feats = torch.tensor(test_df[feat_cols].values, dtype=torch.float32)
+features = torch.cat([train_feats, test_feats])
+
+train_labels = torch.tensor(train_df['label'].values, dtype=torch.long)
+train_mask = torch.arange(len(train_df)) # First N nodes are train
+
+# 5. DEFINE MODEL
+class GCN(nn.Module):
+    def __init__(self, in_feats, h_feats, num_classes):
+        super(GCN, self).__init__()
+        self.W1 = nn.Parameter(torch.empty(in_feats, h_feats))
+        self.W2 = nn.Parameter(torch.empty(h_feats, num_classes))
+        nn.init.xavier_uniform_(self.W1)
+        nn.init.xavier_uniform_(self.W2)
+
+    def forward(self, adj, x):
+        h = torch.spmm(adj, x)       # Layer 1
+        h = torch.mm(h, self.W1)
+        h = F.relu(h)
+        h = torch.spmm(adj, h)       # Layer 2
+        h = torch.mm(h, self.W2)
+        return h
+
+# 6. TRAIN
+model = GCN(features.shape[1], 16, 7)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# Training
-model.train()
-for epoch in range(200):
+print("   - Training...")
+for e in range(101):
+    logits = model(adj, features)
+    loss = F.cross_entropy(logits[train_mask], train_labels)
     optimizer.zero_grad()
-    out = model(data.x, data.edge_index)
-    loss = F.cross_entropy(out[train_mask], data.y[train_mask])
     loss.backward()
     optimizer.step()
+    if e % 20 == 0:
+        print(f"     Epoch {e}, Loss: {loss.item():.4f}")
 
-# Evaluation
+# 7. PREDICT & SAVE (The Critical Step)
+print("   - Generating Predictions...")
 model.eval()
-pred = out[test_mask].argmax(dim=1)
-f1 = f1_score(data.y[test_mask].cpu(), pred.cpu(), average='macro')
-print("Macro F1:", f1)
+with torch.no_grad():
+    logits = model(adj, features)
+    test_logits = logits[len(train_df):] # Extract test nodes only
+    test_preds = test_logits.argmax(1)
 
+# Save strictly according to the manual: 'id' and 'y_pred'
+submission = pd.DataFrame({
+    'id': test_df['id'],
+    'y_pred': test_preds.numpy()  # <--- UPDATED: Uses 'y_pred' per Source 26
+})
+
+submission.to_csv(OUTPUT_PATH, index=False)
+print(f"✅ Saved submission to {OUTPUT_PATH}")
+print("   (Columns: id, y_pred)")
