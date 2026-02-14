@@ -27,12 +27,20 @@ jobs:
       - name: Install Dependencies
         run: pip install pandas scikit-learn
 
-      - name: Restore Secret Answer Key
+      # - name: Restore Secret Answer Key
+      #   # Decodes the hidden labels from GitHub Secrets
+      #   env:
+      #     TEST_LABELS_BASE64: ${{ secrets.TEST_LABELS_BASE64 }}
+      #   run: |
+      #     echo "$TEST_LABELS_BASE64" | base64 -d > data/test_labels_hidden.csv
+
+        - name: Restore Secret Answer Key
         # Decodes the hidden labels from GitHub Secrets
         env:
           TEST_LABELS_BASE64: ${{ secrets.TEST_LABELS_BASE64 }}
         run: |
-          echo "$TEST_LABELS_BASE64" | base64 -d > data/test_labels_hidden.csv
+          # Now decodes AND unzips the file
+          echo "$TEST_LABELS_BASE64" | base64 -d | gzip -d > data/test_labels_hidden.csv
 
       - name: Identify Submission File
         id: find_file
