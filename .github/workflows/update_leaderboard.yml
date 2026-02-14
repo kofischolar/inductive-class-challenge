@@ -6,7 +6,8 @@ on:
     branches:
       - main
     paths:
-      - 'submissions/*.csv'
+      # FIXED: Added '**' to detect files in subfolders (e.g., submissions/team/pred.csv)
+      - 'submissions/**/*.csv'
 
 permissions:
   contents: write
@@ -16,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -27,17 +28,26 @@ jobs:
         run: pip install pandas scikit-learn
 
       - name: Restore Secret Key
+        env:
+          # FIXED: Updated variable name to match your secret
+          TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
-          echo "${{ secrets.TEST_LABELS_BASE64 }}" | base64 -d > data/test_labels_hidden.csv
+          # FIXED: Added '| gzip -d' to decompress the large file
+          echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
 
       - name: Generate New Leaderboard
-        run: python update_leaderboard.py
+        # FIXED: Added 'competition/' directory prefix
+        run: python competition/update_leaderboard.py
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "LeaderboardBot"
           git config --global user.email "bot@github.com"
-          git add LEADERBOARD.md
+          
+          # We expect the python script to update 'leaderboard/leaderboard.md'
+          git add leaderboard/leaderboard.md
+          git add leaderboard/leaderboard.csv
+          
           # Only commit if the file actually changed
           git diff --quiet && git diff --staged --quiet || git commit -m "🏆 Update Leaderboard"
           git push
