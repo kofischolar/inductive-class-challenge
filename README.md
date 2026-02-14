@@ -1,43 +1,84 @@
-## 🏆 GNN Mini-Challenge: Inductive Node Classification
+# 🎗️ Tumor Diagnosis Challenge: Cell-Graph Node Classification
 
-Welcome to the **Rising Stars GNN Mini-Competition** 🚀
+Welcome to the **Tumor Diagnosis Challenge** 🚀
 
-This repository hosts a hands-on challenge on **inductive node classification** using **Graph Neural Networks (GNNs)**. Your task is to train a model on a given graph and **generalize to completely unseen nodes**.
-
----
-
-## 🎯 Challenge Overview
-
-You are given a citation network with node features and labels for training nodes only.  
-Your goal is to **predict the research topic of unseen nodes** using an **inductive GNN model**.
-
-### 🔍 What Makes This Inductive?
-
-* Test nodes are **not present during training**
-* Their IDs and labels are **never seen**
-* The model must rely **only on learned parameters**, not memorized node embeddings
-
-> **Train once, generalize to new nodes.**
+This competition bridges **Biomedical Engineering** and **Graph Machine Learning**. Your task is to build a model that can diagnose the type of a cell (Tumor, Stroma, Immune, etc.) based on its features and its spatial neighbors in a tissue biopsy.
 
 ---
 
-## 📂 Dataset Description
+## 🎯 The Task: Inductive Node Classification
 
-We use the **Cora citation network**, a standard benchmark in graph learning.
+You are provided with cell graphs constructed from H&E stained histology images.
+* **Training Phase:** You receive full graphs (nodes, edges, and labels) from a set of patients (e.g., Patient A, Patient B).
+* **Testing Phase:** You must predict the cell types for **completely unseen patients** (e.g., Patient C).
 
-### Graph Components
+### 🔍 Why "Inductive"?
+Unlike standard transductive tasks (like Cora), the test nodes belong to **entirely new graphs** (new tissue slides) that were not present during training. Your model must learn general rules about tissue organization, not just memorize a specific graph structure.
 
-* **Nodes:** Scientific papers
-* **Edges:** Citation relationships
-* **Node features:** Bag-of-words vectors
-* **Labels:** Research topics (**7 classes**)
+---
 
-### 📁 Files in `data/`
+## 📂 The Dataset (NuCLS-Based)
 
-* `train.csv` — Training nodes (**IDs, features, labels**)
-* `edge_list.csv` — Edges between training nodes
-* `test.csv` — **Unseen test nodes** (**IDs, features only**)
-* `test_edges.csv` — Edges involving test nodes (**used only at inference time**)
+The data is derived from the **NuCLS dataset** (breast cancer).
+
+Gemini said
+Here is the concise "Graph Construction" section ready to be pasted into your README.md.
+
+I recommend adding this right after the "📂 The Dataset" section.
+
+## 🏗️ Graph Construction Pipeline
+The graph was built using the following inductive pipeline to ensure biological realism:
+
+**Node Definition:**
+Raw bounding boxes from the NuCLS dataset were converted into centroids (x,y).
+Each node represents a single cell nucleus.
+
+**Edge Construction (k-NN):**
+For every cell, we computed its 5 nearest spatial neighbors within the same tissue image.
+Edges represent the local tissue microenvironment (e.g., cell-cell interactions).
+**Note:** Edges strictly connect cells within the same image; there are no edges between different patients.
+
+**Inductive Split:**
+The dataset was split by Image ID, not by random cells.
+
+**Training Graph:** Contains 80% of the tissue images.
+
+**Test Graph:** Contains the remaining 20% of images (completely unseen patients).
+
+**Feature Normalization:**
+Node features (x, y, width, height) are standardized (zero mean, unit variance) to ensure stable GNN training.
+
+### 1. The Graph Components
+* **Nodes:** Individual cells (nuclei).
+* **Edges:** Spatial proximity (k-Nearest Neighbors, $k=5$). If two cells are physically close, they are connected.
+* **Node Features ($X$):**
+    * `x`, `y`: Normalized coordinates.
+    * `width`, `height`: Morphological features of the nucleus.
+* **Labels ($Y$):** The biological type of the cell.
+    * `0`: **Tumor** (Malignant)
+    * `1`: **Stromal** (Connective tissue)
+    * `2`: **Lymphocyte** (Immune cells)
+    * `3`: **Macrophage** (Immune cells)
+
+### 2. File Structure (`data/public/`)
+* `train.csv`: Training nodes with labels. Columns: `[id, x, y, width, height, label]`
+* `edge_list.csv`: Edges for the training graph. Columns: `[source, target]`
+* `test_nodes.csv`: **Unseen test nodes** (No labels). Columns: `[id, x, y, width, height]`
+* `test_edges.csv`: Edges for the test graph. Columns: `[source, target]`
+* `sample_submission.csv`: Example format for your predictions.
+
+---
+
+## 📝 Submission Format
+
+You must submit a single CSV file named `predictions.csv`.
+
+**Format:**
+```csv
+id,y_pred
+41269,0
+41270,2
+...
 
 ---
 
