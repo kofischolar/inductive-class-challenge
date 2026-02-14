@@ -63,7 +63,6 @@ Node features (x, y, width, height) are standardized (zero mean, unit variance) 
 * `test_edges.csv`: Edges for the test graph. Columns: `[source, target]`
 * `sample_submission.csv`: Example format for your predictions.
 
----
 
 ## 📝 Submission Format
 
@@ -75,8 +74,7 @@ id,y_pred
 41269,0
 41270,2
 ...
-
----
+```
 
 ## 🚀 How to Participate
 
