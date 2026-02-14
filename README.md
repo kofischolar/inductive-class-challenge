@@ -21,10 +21,6 @@ Unlike standard transductive tasks (like Cora), the test nodes belong to **entir
 
 The data is derived from the **NuCLS dataset** (breast cancer).
 
-Gemini said
-Here is the concise "Graph Construction" section ready to be pasted into your README.md.
-
-I recommend adding this right after the "📂 The Dataset" section.
 
 ## 🏗️ Graph Construction Pipeline
 The graph was built using the following inductive pipeline to ensure biological realism:
