@@ -1,5 +1,7 @@
 import pandas as pd
+import sys
 import os
+import json
 from sklearn.metrics import f1_score
 
 # Config
@@ -17,43 +19,46 @@ def get_score(submission_path, truth_df):
     except:
         return 0.0
 
-def main():
-    # 1. Load Truth
-    if not os.path.exists(TRUTH_FILE):
-        print("Error: Truth file not found")
-        return
-    truth_df = pd.read_csv(TRUTH_FILE).sort_values('id').reset_index(drop=True)
 
-    # 2. Score Every Submission
-    results = []
-    for filename in os.listdir(SUBMISSION_FOLDER):
-        if filename.endswith(".csv") and filename != "sample_submission.csv":
-            path = os.path.join(SUBMISSION_FOLDER, filename)
-            score = get_score(path, truth_df)
-            
-            # Clean filename to get username (e.g., "john_doe.csv" -> "john_doe")
-            user = filename.replace('.csv', '')
-            results.append({'User': user, 'Score': score})
+def main(pred_path, test_nodes_path, metadata_path, leaderboard_path):
+    # 1. Load Metadata (To get Team Name)
+    try:
+        with open(metadata_path, 'r') as f:
+            meta = json.load(f)
+        team_name = meta.get("team", "").strip()
+        if not team_name:
+            raise ValueError("Metadata must contain a 'team' name.")
+    except Exception as e:
+        raise ValueError(f"Could not read metadata.json: {e}")
 
-    # 3. Sort by Score (Highest first)
-    results.sort(key=lambda x: x['Score'], reverse=True)
+    # 2. ENFORCE ONE SUBMISSION POLICY
+    # Check if team is already in the leaderboard
+    if os.path.exists(leaderboard_path):
+        lb = pd.read_csv(leaderboard_path)
+        # Check if team exists (case insensitive)
+        existing_teams = set(lb['team'].str.lower())
+        if team_name.lower() in existing_teams:
+            print(f"❌ REJECTED: Team '{team_name}' has already submitted!")
+            print("Policy: Only one submission attempt per participant is allowed.")
+            sys.exit(1) # Exit with error code to stop the process
 
-    # 4. Generate Markdown Table
-    md = "# 🏆 GNN Challenge Leaderboard\n\n"
-    md += "| Rank | Participant | Macro F1 Score |\n"
-    md += "| :--- | :--- | :--- |\n"
-    
-    for rank, entry in enumerate(results, 1):
-        # Add a medal emoji for top 3
-        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}"
-        md += f"| {medal} | {entry['User']} | {entry['Score']:.4f} |\n"
-    
-    md += "\n*Updated automatically by GitHub Actions*"
+    # 3. Standard Validation (Same as before)
+    preds = pd.read_csv(pred_path)
+    test_nodes = pd.read_csv(test_nodes_path)
 
-    # 5. Save
-    with open(LEADERBOARD_FILE, "w", encoding="utf-8") as f:
-        f.write(md)
-    print("✅ Leaderboard updated!")
+    if "id" not in preds.columns or "y_pred" not in preds.columns:
+        raise ValueError("predictions.csv must contain 'id' and 'y_pred'")
+
+    # Check for NaN or duplicates
+    if preds["y_pred"].isna().any(): raise ValueError("NaN predictions found")
+    if preds["id"].duplicated().any(): raise ValueError("Duplicate IDs found")
+
+    # Check IDs match
+    if set(preds["id"]) != set(test_nodes["id"]):
+        raise ValueError("Prediction IDs do not match test_nodes.csv")
+
+    print(f"✅ VALID SUBMISSION for Team: {team_name}")
 
 if __name__ == "__main__":
-    main()
+    # Expects: [predictions.csv] [test_nodes.csv] [metadata.json] [leaderboard.csv]
+    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
