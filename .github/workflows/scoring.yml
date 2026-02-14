@@ -3,7 +3,8 @@ name: GNN Challenge Auto-Grader
 on:
   pull_request:
     paths:
-      - 'submissions/*.csv'
+      # Updated to catch any CSV inside the submissions folder
+      - 'submissions/**/*.csv'
 
 permissions:
   contents: write
@@ -14,7 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Important: Fetches history so 'git diff' works
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,27 +28,53 @@ jobs:
         run: pip install pandas scikit-learn
 
       - name: Restore Secret Answer Key
-        # This takes the hidden secret from GitHub Settings and creates the CSV file
+        # Decodes the hidden labels from GitHub Secrets
+        env:
+          TEST_LABELS_BASE64: ${{ secrets.TEST_LABELS_BASE64 }}
         run: |
-          echo "${{ secrets.TEST_LABELS_BASE64 }}" | base64 -d > data/test_labels_hidden.csv
+          echo "$TEST_LABELS_BASE64" | base64 -d > data/test_labels_hidden.csv
+
+      - name: Identify Submission File
+        id: find_file
+        run: |
+          # Find the CSV file that changed in this PR (ignoring sample_submission)
+          # We search specifically in the 'submissions/' directory
+          FILE=$(git diff --name-only origin/main HEAD | grep 'submissions/.*.csv' | grep -v 'sample_submission.csv' | head -n 1)
+          
+          if [ -z "$FILE" ]; then
+            echo "::error::No valid submission file found in this PR."
+            exit 1
+          fi
+          
+          echo "Found file: $FILE"
+          # Save the path to the Environment Variable so all other steps can use it
+          echo "FILE_PATH=$FILE" >> $GITHUB_ENV
+
+      - name: Validate Submission (Rules Check)
+        run: |
+          # 1. Find the metadata.json file (it must be in the same folder as the CSV)
+          META_FILE=$(dirname "$FILE_PATH")/metadata.json
+          
+          if [ ! -f "$META_FILE" ]; then
+            echo "::error::metadata.json is MISSING! Please include it in your folder."
+            exit 1
+          fi
+
+          # 2. Run the Python Validation Script
+          # Arguments: [Predictions] [Test Nodes] [Metadata] [Leaderboard]
+          python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "$META_FILE" "leaderboard/leaderboard.csv"
 
       - name: Run Scoring Script
         id: score
         run: |
-          # Get the file changed in this PR
-          FILE=$(git diff --name-only origin/main ${{ github.event.pull_request.head.sha }} | grep 'submissions/.*.csv' | head -n 1)
+          # Run the evaluation script we created earlier
+          # Arguments: [Predictions] [Hidden True Labels]
+          OUTPUT=$(python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv")
           
-          if [ -z "$FILE" ]; then
-            echo "No submission file found."
-            exit 1
-          fi
-
-          # Run the script passing the submission and the RESTORED answer key
-          OUTPUT=$(python scoring_script.py $FILE data/test_labels_hidden.csv)
           echo "$OUTPUT"
           
-          # Extract score
-          SCORE=$(echo "$OUTPUT" | grep -oP 'F1_SCORE:\K[0-9.]+')
+          # Extract score (Looking for "SCORE=0.xxxx")
+          SCORE=$(echo "$OUTPUT" | grep -oP 'SCORE=\K[0-9.]+')
           echo "extracted_score=$SCORE" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
@@ -53,8 +82,8 @@ jobs:
         with:
           message: |
             ### 🤖 Automated Grading Report
-            | Metric | Score |
-            | :--- | :--- |
-            | **Macro F1** | **${{ steps.score.outputs.extracted_score }}** |
+            | Metric | Score | Status |
+            | :--- | :--- | :--- |
+            | **Macro F1** | **${{ steps.score.outputs.extracted_score }}** | ✅ Valid |
             
-            *Great job! If this is the highest score, merge the PR!*
+            *The leaderboard will be updated if this PR is merged.*
