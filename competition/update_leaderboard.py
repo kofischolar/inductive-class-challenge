@@ -1,64 +1,110 @@
 import pandas as pd
-import sys
 import os
-import json
+import glob
 from sklearn.metrics import f1_score
 
-# Config
-SUBMISSION_FOLDER = 'submissions'
-TRUTH_FILE = 'data/test_labels_hidden.csv'
-LEADERBOARD_FILE = 'LEADERBOARD.md'
+# CONFIG
+SUBMISSION_DIR = "submissions"
+TRUTH_FILE = "data/test_labels_hidden.csv"
+LEADERBOARD_CSV = "leaderboard/leaderboard.csv"
+LEADERBOARD_MD = "leaderboard/leaderboard.md"
 
-def get_score(submission_path, truth_df):
-    try:
-        pred_df = pd.read_csv(submission_path)
-        # Basic validation
-        if len(pred_df) != len(truth_df): return 0.0
-        pred_df = pred_df.sort_values('id').reset_index(drop=True)
-        return f1_score(truth_df['label'], pred_df['label'], average='macro')
-    except:
-        return 0.0
+def main():
+    # 1. Load Truth
+    if not os.path.exists(TRUTH_FILE):
+        print(f"❌ Error: Truth file {TRUTH_FILE} not found")
+        return
+    
+    true_df = pd.read_csv(TRUTH_FILE).sort_values('id').reset_index(drop=True)
+    
+    # 2. Find All Submissions
+    # Recursive search for any csv file in submissions/
+    files = glob.glob(f"{SUBMISSION_DIR}/**/*.csv", recursive=True)
+    results = []
 
+    print(f"🔍 Found {len(files)} submission files.")
 
-def main(pred_path, test_nodes_path, metadata_path, leaderboard_path):
-    # 1. Load Metadata (To get Team Name)
-    try:
-        with open(metadata_path, 'r') as f:
-            meta = json.load(f)
-        team_name = meta.get("team", "").strip()
-        if not team_name:
-            raise ValueError("Metadata must contain a 'team' name.")
-    except Exception as e:
-        raise ValueError(f"Could not read metadata.json: {e}")
+    for file_path in files:
+        # Skip the example file
+        if "sample_submission.csv" in file_path:
+            continue
+            
+        try:
+            # Load Submission
+            pred_df = pd.read_csv(file_path)
+            
+            # Validation: Columns
+            if 'id' not in pred_df.columns or 'y_pred' not in pred_df.columns:
+                print(f"⚠️ Skipping {file_path}: Missing columns")
+                continue 
+            
+            # Validation: IDs match
+            pred_df = pred_df.sort_values('id').reset_index(drop=True)
+            if not pred_df['id'].equals(true_df['id']):
+                print(f"⚠️ Skipping {file_path}: ID mismatch")
+                continue
 
-    # 2. ENFORCE ONE SUBMISSION POLICY
-    # Check if team is already in the leaderboard
-    if os.path.exists(leaderboard_path):
-        lb = pd.read_csv(leaderboard_path)
-        # Check if team exists (case insensitive)
-        existing_teams = set(lb['team'].str.lower())
-        if team_name.lower() in existing_teams:
-            print(f"❌ REJECTED: Team '{team_name}' has already submitted!")
-            print("Policy: Only one submission attempt per participant is allowed.")
-            sys.exit(1) # Exit with error code to stop the process
+            # Score (Macro F1)
+            score = f1_score(true_df['label'], pred_df['y_pred'], average='macro')
+            
+            # Extract Team Name from folder structure
+            # Structure: submissions/inbox/TEAM_NAME/run_01/predictions.csv
+            parts = file_path.split(os.sep)
+            # We assume the folder directly inside 'submissions' (or 'inbox') is the team name
+            # Adjust index based on your exact folder depth. 
+            # If path is submissions/inbox/teamA/..., team is parts[2]
+            if "inbox" in parts:
+                idx = parts.index("inbox") + 1
+                if idx < len(parts):
+                    team_name = parts[idx]
+                else:
+                    team_name = "Unknown"
+            else:
+                # Fallback: parent folder name
+                team_name = os.path.basename(os.path.dirname(file_path))
 
-    # 3. Standard Validation (Same as before)
-    preds = pd.read_csv(pred_path)
-    test_nodes = pd.read_csv(test_nodes_path)
+            results.append({
+                'team': team_name,
+                'score': score,
+                'date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
+            })
 
-    if "id" not in preds.columns or "y_pred" not in preds.columns:
-        raise ValueError("predictions.csv must contain 'id' and 'y_pred'")
+        except Exception as e:
+            print(f"⚠️ Failed to process {file_path}: {e}")
 
-    # Check for NaN or duplicates
-    if preds["y_pred"].isna().any(): raise ValueError("NaN predictions found")
-    if preds["id"].duplicated().any(): raise ValueError("Duplicate IDs found")
+    # 3. Save Leaderboard CSV
+    if not results:
+        print("No valid submissions found.")
+        return
 
-    # Check IDs match
-    if set(preds["id"]) != set(test_nodes["id"]):
-        raise ValueError("Prediction IDs do not match test_nodes.csv")
+    df = pd.DataFrame(results)
+    
+    # Sort by Score (Descending) and keep best score per team
+    df = df.sort_values(by='score', ascending=False)
+    df = df.drop_duplicates(subset=['team'], keep='first')
+    
+    os.makedirs("leaderboard", exist_ok=True)
+    df.to_csv(LEADERBOARD_CSV, index=False)
+    
+    # 4. Render Markdown
+    render_markdown(df)
+    print("✅ Leaderboard Updated!")
 
-    print(f"✅ VALID SUBMISSION for Team: {team_name}")
+def render_markdown(df):
+    md = "# 🏆 Tumor-GNN Leaderboard\n\n"
+    md += "| Rank | Team | Macro-F1 Score | Last Updated |\n"
+    md += "| :--- | :--- | :--- | :--- |\n"
+    
+    # Add Rank with Dense logic (1, 2, 2, 3)
+    df['rank'] = df['score'].rank(method='dense', ascending=False).astype(int)
+    
+    for _, row in df.iterrows():
+        r = row['rank']
+        medal = "🥇" if r == 1 else "🥈" if r == 2 else "🥉" if r == 3 else str(r)
+        md += f"| {medal} | {row['team']} | {row['score']:.4f} | {row['date']} |\n"
+        
+    with open(LEADERBOARD_MD, "w") as f:
+        f.write(md)
 
 if __name__ == "__main__":
-    # Expects: [predictions.csv] [test_nodes.csv] [metadata.json] [leaderboard.csv]
-    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    main()
