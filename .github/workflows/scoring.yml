@@ -28,18 +28,18 @@ jobs:
         run: pip install pandas scikit-learn
 
       - name: Restore Secret Answer Key
-        # Decodes the hidden labels from GitHub Secrets
         env:
-          TEST_LABELS_BASE64: ${{ secrets.TEST_LABELS_BASE64 }}
+          # FIXED: Changed from secrets.TEST_LABELS_BASE64 to secrets.TEST_LABELS
+          TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
           # Now decodes AND unzips the file
-          echo "$TEST_LABELS_BASE64" | base64 -d | gzip -d > data/test_labels_hidden.csv
+          # FIXED: Using the $TEST_LABELS variable defined above
+          echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
 
       - name: Identify Submission File
         id: find_file
         run: |
           # Find the CSV file that changed in this PR (ignoring sample_submission)
-          # We search specifically in the 'submissions/' directory
           FILE=$(git diff --name-only origin/main HEAD | grep 'submissions/.*.csv' | grep -v 'sample_submission.csv' | head -n 1)
           
           if [ -z "$FILE" ]; then
@@ -48,12 +48,12 @@ jobs:
           fi
           
           echo "Found file: $FILE"
-          # Save the path to the Environment Variable so all other steps can use it
+          # Save the path to the Environment Variable
           echo "FILE_PATH=$FILE" >> $GITHUB_ENV
 
       - name: Validate Submission (Rules Check)
         run: |
-          # 1. Find the metadata.json file (it must be in the same folder as the CSV)
+          # 1. Find the metadata.json file
           META_FILE=$(dirname "$FILE_PATH")/metadata.json
           
           if [ ! -f "$META_FILE" ]; then
@@ -62,14 +62,12 @@ jobs:
           fi
 
           # 2. Run the Python Validation Script
-          # Arguments: [Predictions] [Test Nodes] [Metadata] [Leaderboard]
           python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "$META_FILE" "leaderboard/leaderboard.csv"
 
       - name: Run Scoring Script
         id: score
         run: |
-          # Run the evaluation script we created earlier
-          # Arguments: [Predictions] [Hidden True Labels]
+          # Run the evaluation script
           OUTPUT=$(python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv")
           
           echo "$OUTPUT"
