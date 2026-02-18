@@ -1,0 +1,53 @@
+import rsa
+import sys
+import os
+import glob
+
+def decrypt_submission():
+    # 1. Get Private Key from Environment Variable
+    private_key_data = os.environ.get("PRIVATE_KEY_CONTENT")
+    if not private_key_data:
+        print("Error: PRIVATE_KEY_CONTENT not found!")
+        sys.exit(1)
+
+    try:
+        private_key = rsa.PrivateKey.load_pkcs1(private_key_data.encode('utf8'))
+    except Exception as e:
+        print(f"Error loading private key: {e}")
+        sys.exit(1)
+
+    # 2. Find the encrypted file in 'submissions/' folder
+    enc_files = glob.glob('submissions/*.enc')
+    if not enc_files:
+        print("No .enc file found in submissions/ folder.")
+        # Exit gracefully if no encrypted file (maybe it's a README update)
+        sys.exit(0) 
+
+    enc_file_path = enc_files[0]
+    print(f"Found encrypted file: {enc_file_path}")
+
+    # 3. Decrypt
+    with open(enc_file_path, 'rb') as f:
+        encrypted_data = f.read()
+
+    try:
+        decrypted_data = b""
+        chunk_size = 256 # Standard for 2048-bit keys
+        for i in range(0, len(encrypted_data), chunk_size):
+            chunk = encrypted_data[i:i+chunk_size]
+            decrypted_chunk = rsa.decrypt(chunk, private_key)
+            decrypted_data += decrypted_chunk
+            
+        # 4. Save as 'submissions/current_submission.csv' for evaluate.py
+        output_path = "submissions/current_submission.csv"
+        with open(output_path, 'wb') as f:
+            f.write(decrypted_data)
+            
+        print(f"✅ Success! Decrypted to {output_path}")
+
+    except Exception as e:
+        print(f"❌ Decryption failed! Invalid key or corrupted file. Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    decrypt_submission()
