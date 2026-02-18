@@ -46,9 +46,9 @@ jobs:
 
           echo "🔍 Validating: $FILE_PATH"
 
-          # Run your python validation script
-          # Arguments: <submission_path> <test_nodes_path> <leaderboard_path>
-          python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "LEADERBOARD.md"
+          # USE THE CSV PATH HERE (So pd.read_csv works)
+          python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "leaderboard/leaderboard.csv"
+
 
       # 3. RESTORE HIDDEN ANSWER KEY
       - name: Restore Secret Answer Key
