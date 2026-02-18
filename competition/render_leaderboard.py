@@ -2,29 +2,25 @@ import pandas as pd
 import os
 
 LEADERBOARD_CSV = "leaderboard/leaderboard.csv"
-LEADERBOARD_MD = "leaderboard/leaderboard.md"
+# FIXED: Points to the root file so the README link works
+LEADERBOARD_MD = "LEADERBOARD.md"
 
 def render():
     if not os.path.exists(LEADERBOARD_CSV):
-        print("No leaderboard file found.")
+        print("❌ No leaderboard file found at:", LEADERBOARD_CSV)
         return
 
     # 1. Load Data
     df = pd.read_csv(LEADERBOARD_CSV)
     
     # 2. Sort by Score (Descending for F1/Accuracy)
-    # If using Loss (lower is better), change ascending=True
     df = df.sort_values(by="score", ascending=False)
 
     # 3. Assign Ranks (Handling Ties)
-    # method='min' gives 1, 2, 2, 4 (Standard competition ranking)
-    # method='dense' gives 1, 2, 2, 3 (Your requirement: "tied scores share rank")
+    # method='dense' gives 1, 2, 2, 3
     df['rank'] = df['score'].rank(method='dense', ascending=False).astype(int)
 
     # 4. Format the Table
-    # Reorder columns
-    display_cols = ['rank', 'team', 'score', 'date']
-    # Add emojis to top 3
     def format_rank(r):
         if r == 1: return "🥇 1"
         if r == 2: return "🥈 2"
@@ -33,24 +29,26 @@ def render():
     
     df['rank_display'] = df['rank'].apply(format_rank)
     
-    # Create Markdown
+    # Create Markdown Content
     md_lines = []
-    md_lines.append("# 🏆 Competition Leaderboard")
+    md_lines.append("# 🏆 Tumor Diagnosis Leaderboard")
+    md_lines.append("")
     md_lines.append(f"**Last Updated:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
     md_lines.append("")
-    md_lines.append("| Rank | Team | Score (Macro-F1) | Date |")
+    md_lines.append("| Rank | Team | Macro F1 Score | Date |")
     md_lines.append("| :--- | :--- | :--- | :--- |")
     
     for _, row in df.iterrows():
         # Clean team name to prevent markdown injection
         team = str(row['team']).replace("|", "")
+        # Format score to 4 decimal places
         md_lines.append(f"| {row['rank_display']} | {team} | {row['score']:.4f} | {row['date']} |")
 
-    # 5. Save
+    # 5. Save to Root Directory
     with open(LEADERBOARD_MD, "w") as f:
         f.write("\n".join(md_lines))
     
-    print("✅ Leaderboard Markdown updated.")
+    print(f"✅ Leaderboard Markdown updated at {LEADERBOARD_MD}")
 
 if __name__ == "__main__":
     render()
