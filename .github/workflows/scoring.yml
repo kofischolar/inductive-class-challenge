@@ -3,7 +3,6 @@ name: GNN Challenge Auto-Grader
 on:
   pull_request:
     paths:
-      # CHANGED: Now watches for encrypted files
       - 'submissions/**/*.enc'
 
 permissions:
@@ -27,29 +26,43 @@ jobs:
       - name: Install Dependencies
         run: pip install pandas scikit-learn rsa
 
-      # --- NEW STEP: Decrypt the Student's Submission ---
+      # 1. DECRYPT THE SUBMISSION
       - name: Decrypt Submission
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-        run: |
-          # Run the decryption script we created earlier
-          # This will create 'submissions/submission.csv' from the .enc file
-          python competition/decrypt.py
-      # --------------------------------------------------
+        run: python competition/decrypt.py
 
+      # 2. VALIDATE SUBMISSION (Enforce "One Submission" Rule)
+      - name: Validate Submission
+        run: |
+          # Find the decrypted CSV (ignoring the sample file)
+          # This works regardless of whether the file is named 'TeamA.csv' or 'submission.csv'
+          FILE_PATH=$(ls submissions/*.csv | grep -v "sample_submission.csv" | head -n 1)
+
+          if [ -z "$FILE_PATH" ]; then
+            echo "::error::No decrypted CSV found! Decryption might have failed."
+            exit 1
+          fi
+
+          echo "🔍 Validating: $FILE_PATH"
+
+          # Run your python validation script
+          # Arguments: <submission_path> <test_nodes_path> <leaderboard_path>
+          python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "LEADERBOARD.md"
+
+      # 3. RESTORE HIDDEN ANSWER KEY
       - name: Restore Secret Answer Key
         env:
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
-          # Decodes your hidden ground truth labels
           echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
 
+      # 4. RUN SCORING
       - name: Run Scoring Script
         id: score
         run: |
-          # We now point to the DECRYPTED file (submission.csv)
-          # Note: We hardcoded the output path in decrypt.py to 'submissions/submission.csv'
-          FILE_PATH="submissions/submission.csv"
+          # Find the file again
+          FILE_PATH=$(ls submissions/*.csv | grep -v "sample_submission.csv" | head -n 1)
           
           # Run evaluation
           OUTPUT=$(python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv")
@@ -60,6 +73,7 @@ jobs:
           SCORE=$(echo "$OUTPUT" | grep -oP 'SCORE=\K[0-9.]+')
           echo "extracted_score=$SCORE" >> $GITHUB_OUTPUT
 
+      # 5. POST COMMENT
       - name: Comment on PR
         uses: tholman/github-action-comment-pull-request@v2
         with:
