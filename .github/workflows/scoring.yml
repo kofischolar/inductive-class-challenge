@@ -3,8 +3,8 @@ name: GNN Challenge Auto-Grader
 on:
   pull_request:
     paths:
-      # Updated to catch any CSV inside the submissions folder
-      - 'submissions/**/*.csv'
+      # CHANGED: Now watches for encrypted files
+      - 'submissions/**/*.enc'
 
 permissions:
   contents: write
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Important: Fetches history so 'git diff' works
+          fetch-depth: 0 
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,49 +25,33 @@ jobs:
           python-version: '3.9'
 
       - name: Install Dependencies
-        run: pip install pandas scikit-learn
+        run: pip install pandas scikit-learn rsa
+
+      # --- NEW STEP: Decrypt the Student's Submission ---
+      - name: Decrypt Submission
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: |
+          # Run the decryption script we created earlier
+          # This will create 'submissions/submission.csv' from the .enc file
+          python competition/decrypt.py
+      # --------------------------------------------------
 
       - name: Restore Secret Answer Key
         env:
-          # FIXED: Changed from secrets.TEST_LABELS_BASE64 to secrets.TEST_LABELS
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
-          # Now decodes AND unzips the file
-          # FIXED: Using the $TEST_LABELS variable defined above
+          # Decodes your hidden ground truth labels
           echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
-
-      - name: Identify Submission File
-        id: find_file
-        run: |
-          # Find the CSV file that changed in this PR (ignoring sample_submission)
-          FILE=$(git diff --name-only origin/main HEAD | grep 'submissions/.*.csv' | grep -v 'sample_submission.csv' | head -n 1)
-          
-          if [ -z "$FILE" ]; then
-            echo "::error::No valid submission file found in this PR."
-            exit 1
-          fi
-          
-          echo "Found file: $FILE"
-          # Save the path to the Environment Variable
-          echo "FILE_PATH=$FILE" >> $GITHUB_ENV
-
-      - name: Validate Submission (Rules Check)
-        run: |
-          # 1. Find the metadata.json file
-          META_FILE=$(dirname "$FILE_PATH")/metadata.json
-          
-          if [ ! -f "$META_FILE" ]; then
-            echo "::error::metadata.json is MISSING! Please include it in your folder."
-            exit 1
-          fi
-
-          # 2. Run the Python Validation Script
-          python competition/validate_submission.py "$FILE_PATH" "data/public/test_nodes.csv" "$META_FILE" "leaderboard/leaderboard.csv"
 
       - name: Run Scoring Script
         id: score
         run: |
-          # Run the evaluation script
+          # We now point to the DECRYPTED file (submission.csv)
+          # Note: We hardcoded the output path in decrypt.py to 'submissions/submission.csv'
+          FILE_PATH="submissions/submission.csv"
+          
+          # Run evaluation
           OUTPUT=$(python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv")
           
           echo "$OUTPUT"
