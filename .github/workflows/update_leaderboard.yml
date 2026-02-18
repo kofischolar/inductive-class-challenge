@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths:
-      # FIXED: Added '**' to detect files in subfolders (e.g., submissions/team/pred.csv)
-      - 'submissions/**/*.csv'
+      # FIXED: Now triggers when encrypted files are merged
+      - 'submissions/**/*.enc'
 
 permissions:
   contents: write
@@ -25,18 +25,55 @@ jobs:
           python-version: '3.9'
 
       - name: Install Dependencies
-        run: pip install pandas scikit-learn
+        run: pip install pandas scikit-learn rsa
+
+      # --- NEW STEP: Decrypt ALL Submissions ---
+      - name: Decrypt All Submissions
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: |
+          # This inline script loops through EVERY .enc file and decrypts it
+          python -c "
+          import rsa, os, glob, sys
+
+          try:
+              key_data = os.environ.get('PRIVATE_KEY')
+              if not key_data: raise Exception('Missing Private Key')
+              pk = rsa.PrivateKey.load_pkcs1(key_data.encode('utf8'))
+              
+              files = glob.glob('submissions/*.enc')
+              print(f'Found {len(files)} encrypted submissions.')
+
+              for enc_file in files:
+                  try:
+                      print(f'Decrypting {enc_file}...')
+                      with open(enc_file, 'rb') as f: encrypted_data = f.read()
+                      
+                      decrypted_data = b''
+                      chunk_size = 256
+                      for i in range(0, len(encrypted_data), chunk_size):
+                          decrypted_data += rsa.decrypt(encrypted_data[i:i+chunk_size], pk)
+                      
+                      # Save as .csv (remove .enc extension)
+                      csv_name = enc_file.replace('.enc', '')
+                      with open(csv_name, 'wb') as f: f.write(decrypted_data)
+                  except Exception as e:
+                      print(f'Skipping {enc_file}: {e}')
+
+          except Exception as e:
+              print(f'Critical Error: {e}')
+              sys.exit(1)
+          "
+      # -----------------------------------------
 
       - name: Restore Secret Key
         env:
-          # FIXED: Updated variable name to match your secret
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
-          # FIXED: Added '| gzip -d' to decompress the large file
           echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
 
       - name: Generate New Leaderboard
-        # FIXED: Added 'competition/' directory prefix
+        # Now this script will find the decrypt .csv files and work perfectly!
         run: python competition/update_leaderboard.py
 
       - name: Commit and Push Changes
@@ -44,9 +81,8 @@ jobs:
           git config --global user.name "LeaderboardBot"
           git config --global user.email "bot@github.com"
           
-          # We expect the python script to update 'leaderboard/leaderboard.md'
-          git add leaderboard/leaderboard.md
-          git add leaderboard/leaderboard.csv
+          # We expect the python script to update 'LEADERBOARD.md' (Check capitalization!)
+          git add LEADERBOARD.md
           
           # Only commit if the file actually changed
           git diff --quiet && git diff --staged --quiet || git commit -m "🏆 Update Leaderboard"
