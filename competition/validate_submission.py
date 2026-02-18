@@ -1,49 +1,62 @@
 import pandas as pd
 import sys
 import os
-import json
 
-def main(pred_path, test_nodes_path, metadata_path, leaderboard_path):
-    # --- 1. METADATA & POLICY CHECKS ---
-    try:
-        with open(metadata_path, 'r') as f:
-            meta = json.load(f)
-        team_name = meta.get("team", "").strip()
-        if not team_name:
-            raise ValueError("Metadata must contain a 'team' name.")
-    except Exception as e:
-        raise ValueError(f"Could not read metadata.json: {e}")
+def main(submission_path, test_nodes_path, leaderboard_path):
+    # Extract Team Name from Filename (e.g., 'TeamA.csv' -> 'TeamA')
+    team_name = os.path.splitext(os.path.basename(submission_path))[0]
+    print(f"🔍 Validating submission for Team: {team_name}")
 
-    # Check One-Submission Policy
+    # --- 1. SUPERVISOR RULE: ONE SUBMISSION ONLY ---
+    # Check if this team is already on the leaderboard
     if os.path.exists(leaderboard_path):
-        lb = pd.read_csv(leaderboard_path)
-        existing_teams = set(lb['team'].str.lower())
-        if team_name.lower() in existing_teams:
-            print(f"❌ REJECTED: Team '{team_name}' has already submitted!")
-            sys.exit(1)
+        try:
+            lb_df = pd.read_csv(leaderboard_path)
+            # Normalize to lowercase to prevent "TeamA" vs "teama" exploits
+            existing_teams = set(lb_df['team'].astype(str).str.lower())
+            
+            if team_name.lower() in existing_teams:
+                print(f"❌ REJECTED: Team '{team_name}' has already submitted.")
+                print("   Per competition rules, only one submission is allowed.")
+                sys.exit(1)
+        except Exception as e:
+            print(f"⚠️ Warning: Could not read leaderboard (Skipping check): {e}")
 
-    # --- 2. DATA FORMAT CHECKS ---
-    preds = pd.read_csv(pred_path)
-    test_nodes = pd.read_csv(test_nodes_path)
+    # --- 2. LOAD DATA ---
+    try:
+        preds = pd.read_csv(submission_path)
+        test_nodes = pd.read_csv(test_nodes_path)
+    except Exception as e:
+        print(f"❌ Error: Could not read files. {e}")
+        sys.exit(1)
 
-    # Column existence
-    if "id" not in preds.columns or "y_pred" not in preds.columns:
-        raise ValueError("predictions.csv must contain 'id' and 'y_pred'")
+    # --- 3. COLUMN CHECKS ---
+    required_cols = {'id', 'label'}
+    if not required_cols.issubset(preds.columns):
+        print(f"❌ Error: CSV headers must be 'id,label'. Found: {list(preds.columns)}")
+        sys.exit(1)
 
-    # ID Matching
-    if set(preds["id"]) != set(test_nodes["id"]):
-        raise ValueError("Prediction IDs do not match test_nodes.csv")
+    # --- 4. ID MATCHING ---
+    if set(preds['id']) != set(test_nodes['id']):
+        print(f"❌ Error: Submission IDs do not match the test set.")
+        sys.exit(1)
 
-    # --- 3. MULTI-CLASS CHECKS (The Update) ---
-    # Must be Integers
-    if not pd.api.types.is_integer_dtype(preds["y_pred"]):
-         raise ValueError("Predictions must be integers (0, 1, 2, 3), not decimals.")
-         
-    # Must be within 0-3 range (Tumor, Stromal, Lymphocyte, Macrophage)
-    if ((preds["y_pred"] < 0) | (preds["y_pred"] > 3)).any():
-        raise ValueError("Predictions must be class IDs between 0 and 3.")
+    # --- 5. DATA TYPE & RANGE CHECKS ---
+    if not pd.api.types.is_integer_dtype(preds['label']):
+        print("❌ Error: 'label' column must contain integers.")
+        sys.exit(1)
+
+    valid_classes = {0, 1, 2, 3}
+    if not preds['label'].isin(valid_classes).all():
+        print(f"❌ Error: Found invalid class labels. Allowed: {valid_classes}")
+        sys.exit(1)
 
     print(f"✅ VALID SUBMISSION for Team: {team_name}")
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    # Now takes 3 arguments
+    if len(sys.argv) != 4:
+        print("Usage: python validate_submission.py <submission_csv> <test_nodes_csv> <leaderboard_csv>")
+        sys.exit(1)
+        
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
