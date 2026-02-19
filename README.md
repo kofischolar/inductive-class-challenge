@@ -1,8 +1,8 @@
-# 🎗️ Tumor Diagnosis Challenge: Cell-Graph Node Classification
+# 🎗️ The THInC Challenge: Tumor Histopathology Inductive Classification
 
 ## Welcome to the Tumor Diagnosis Challenge 🚀
 
-This competition bridges **Biomedical Engineering** and **Graph Machine Learning**. Your task is to build a model that can diagnose the type of a cell (Tumor, Stroma, Immune, etc.) based on its features and its spatial neighbors in a tissue biopsy.
+This competition bridges **Biomedical Engineering** and **Graph Machine Learning**. Your task is to build a model that can diagnose the type of a cell (Tumor, Stroma, Immune, etc.) based on its features and its spatial neighbors in a tissue biopsy. Standard AI often fails in clinics because it memorizes training data, so our challenge forces models to predict cell types inductively, meaning they must generalize to completely unseen patients.
 
 ---
 
