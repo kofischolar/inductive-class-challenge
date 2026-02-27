@@ -31,9 +31,9 @@ def main(submission_path, test_nodes_path, leaderboard_path):
         sys.exit(1)
 
     # --- 3. COLUMN CHECKS ---
-    required_cols = {'id', 'label'}
+    required_cols = {'id', 'y_pred'}
     if not required_cols.issubset(preds.columns):
-        print(f"❌ Error: CSV headers must be 'id,label'. Found: {list(preds.columns)}")
+        print(f"❌ Error: CSV headers must be 'id,y_pred'. Found: {list(preds.columns)}")
         sys.exit(1)
 
     # --- 4. ID MATCHING ---
@@ -42,12 +42,12 @@ def main(submission_path, test_nodes_path, leaderboard_path):
         sys.exit(1)
 
     # --- 5. DATA TYPE & RANGE CHECKS ---
-    if not pd.api.types.is_integer_dtype(preds['label']):
-        print("❌ Error: 'label' column must contain integers.")
+    if not pd.api.types.is_integer_dtype(preds['y_pred']):
+        print("❌ Error: 'y_pred' column must contain integers.")
         sys.exit(1)
 
     valid_classes = {0, 1, 2, 3}
-    if not preds['label'].isin(valid_classes).all():
+    if not preds['y_pred'].isin(valid_classes).all():
         print(f"❌ Error: Found invalid class labels. Allowed: {valid_classes}")
         sys.exit(1)
 
