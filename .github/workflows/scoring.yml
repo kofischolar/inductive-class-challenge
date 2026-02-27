@@ -1,7 +1,7 @@
 name: GNN Challenge Auto-Grader
 
 on:
-  pull_request:
+  pull_request_target:
     paths:
       - 'submissions/**/*.enc'
 
@@ -16,8 +16,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0 
 
+      # KEEP EVERYTHING BELOW THIS LINE EXACTLY THE SAME
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -56,26 +58,28 @@ jobs:
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
         run: |
           echo "$TEST_LABELS" | base64 -d | gzip -d > data/test_labels_hidden.csv
-
+          
       # 4. RUN SCORING
       - name: Run Scoring Script
         id: score
         run: |
-          # Find the file again
           FILE_PATH=$(ls submissions/*.csv | grep -v "sample_submission.csv" | head -n 1)
           
-          # Run evaluation
+          echo "🔍 Previewing the hidden answer key to ensure it isn't corrupted:"
+          head -n 2 data/test_labels_hidden.csv
+          
+          echo "🐛 Running Python script directly to reveal any traceback errors:"
+          python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv"
+          
+          echo "✅ Evaluation succeeded, capturing score..."
           OUTPUT=$(python competition/evaluate.py "$FILE_PATH" "data/test_labels_hidden.csv")
-          
-          echo "$OUTPUT"
-          
-          # Extract score (Looking for "SCORE=0.xxxx")
           SCORE=$(echo "$OUTPUT" | grep -oP 'SCORE=\K[0-9.]+')
           echo "extracted_score=$SCORE" >> $GITHUB_OUTPUT
+        
 
       # 5. POST COMMENT
       - name: Comment on PR
-        uses: tholman/github-action-comment-pull-request@v2
+        uses: mshick/add-pr-comment@v2
         with:
           message: |
             ### 🤖 Automated Grading Report
