@@ -75,7 +75,7 @@ jobs:
 
       # 5. POST COMMENT
       - name: Comment on PR
-        uses: tholman/github-action-comment-pull-request@v2
+        uses: mshick/add-pr-comment@v2
         with:
           message: |
             ### 🤖 Automated Grading Report
